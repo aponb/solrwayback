@@ -39,18 +39,12 @@ import dk.kb.netarchivesuite.solrwayback.service.dto.statistics.DomainYearStatis
 import dk.kb.netarchivesuite.solrwayback.service.exception.InvalidArgumentServiceException;
 import dk.kb.netarchivesuite.solrwayback.util.DateUtils;
 
-public class NetarchiveSolrClient {
+public class NetarchiveSolrClient extends NetarchiveAbstractClient {
     private static final Logger log = LoggerFactory.getLogger(NetarchiveSolrClient.class);
-    private static final long M = 1000000; // ns -> ms
 
     protected static SolrClient solrServer;
     protected static SolrClient noCacheSolrServer;
     protected static NetarchiveSolrClient instance = null;
-    protected static Pattern TAGS_VALID_PATTERN = Pattern.compile("[-_.a-zA-Z0-9Ã¦Ã¸Ã¥Ã†Ã˜Ã…]+");
-  
-    private static String NO_REVISIT_FILTER ="record_type:response OR record_type:arc OR record_type:resource";
-    protected static String indexDocFieldList = "id,score,title,url,url_norm,links_images,source_file_path,source_file,source_file_offset,domain,resourcename,content_type,content_type_full,content_type_norm,hash,type,crawl_date,content_encoding,exif_location,status_code,last_modified,redirect_to_norm";
-    protected static String indexDocFieldListShort = "url,url_norm,source_file_path,source_file,source_file_offset,crawl_date";
 
     protected NetarchiveSolrClient() { // private. Singleton
     }

@@ -29,7 +29,9 @@ public class PropertiesLoader {
     public static final String WARC_FILE_RESOLVER_UNQUALIFIED = "_unqualified_";
 
     private static final String DEFAULT_PROPERTY_FILE = "solrwayback.properties";
+    private static final String ENGINE_TYPE_PROPERTY="engine.type";
     private static final String SOLR_SERVER_PROPERTY="solr.server";
+    private static final String OPENSEARCH_SERVER_PROPERTY="opensearch.server";
     private static final String WARC_FILE_RESOLVER_CLASS_PROPERTY="warc.file.resolver.class";
     private static final String WARC_FILE_RESOLVER_PARAMETERS_PROPERTY="warc.file.resolver.parameters";
     private static final String WAYBACK_BASEURL_PROPERTY="wayback.baseurl";
@@ -49,7 +51,9 @@ public class PropertiesLoader {
     
     private static Properties serviceProperties = null;
 
+    public static String ENGINE_TYPE = null;
     public static String SOLR_SERVER = null;
+    public static String OPENSEARCH_SERVER = null;
     public static String WAYBACK_BASEURL = null;
     public static String WAYBACK_HOST = null; //Taken from WAYBACK_BASEURL
     public static int WAYBACK_SERVER_PORT = 0; //Taken from WAYBACK_BASEURL
