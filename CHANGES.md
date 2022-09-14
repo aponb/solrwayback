@@ -1,19 +1,73 @@
-4.2.4
+# SolrWayback changelog
+
+
+4.3.1
+-----
+New propety must be added to the solrwaybackweb.properties: 
+collection.text.file=/about_collection.txt
+
+Just as with the about-text this can be customized and point to a file on the local disk.
+The "About this archive" text has been changed to "About us". This is intended for short information 
+about the institution. While "About the Collection" should contain text of the corpus 
+behind the collection and curator information about crawl-years etc.
+
+
+Playback improvement. Fixed some redirect/url-parsing bugs in the ROOT.war (solrwaybackrootproxy).  https://github.com/netarchivesuite/solrwayback/issues/231 
+Playback improvement: Queries for page resource resolving are now properly quited, avoiding a scenario where resolving of all page resources failed. https://github.com/netarchivesuite/solrwayback/issues/230
+Playback improvement: data: URLs are now bypassed is resource URL rewriting and are thus supported for playback. https://github.com/netarchivesuite/solrwayback/issues/230
+The SolrWaybackRootProxy (ROOT.war) in the Software bundle has been updated to fix rare playback 
+issues.
+
+GUI improvement. Use escape-key to close all modal pop-ups. (toolbox, search syntax, full size 
+images)
+
+
+
+4.3.0
 -----
 Updated frontend dependencies (security)
+
 Added support for WARC file reading with Inputstream, this can be used if WARC files are not on a file-system. (Skipping HttpInputStream implementation for reading WARCs with offset)
-Support for WARC resource type (Warc-Indexer) without URL in WARC header. (still needs work)
+
+Warc-indexer not supports WARC type 'resource' without URL in WARC header  (Typical created with Warcit from a file system)
+
 Minor Solr query syntax fix, so it will also work on Solr 6. (not recommended to use Solr6!)
-Docker support. (so far limited support... write more later)
-Support for legacy WARC-Indexer before version 3.0 that does not have url_norm field. See below. 
-New property in solwayback.properties 'url.normaliser'. Will default to normal. Other options are minimal and legacy. 
-New property in solwayback.properties 'solr.search.params'. Add default solr params to every query.
-(Uncommented advanced query method added.)
+
+Docker support. Only recommended for trying a demo SolrWayback if you do not want to use the bundle install. See README for more info.
+
+Support for legacy WARC-Indexer before version 3.0 that does not have url_norm field. (not recommended)
+
+Fixed n-gram to show statistics for years after 2020.
+
+SolrWayback can now be deployed at a deeper url than 'https://kb.dk/solrwayback' . Etc. : 'https://kb.dk/covid-collection/solrwayback'.
+
+If the webapp base above is not just domain/solrwayback, then an additional property needs to be defined in solrwaybackweb.properties. In the case above the property : webapp.prefix=/covid-collection/solrwayback/  . See more in the README.md how to install SolrWayback under another subdirectory after domain. If the property is not defined it will default to /solrwayback/
+
+When loading binaries from WARC-file+offset check that the the resource is in the collection (in Solr). This will prevent URL hacking from guessing WARC-files and offset that is not in the collection but on the file-system. This can be enabled by new a property. Enabled this property will have minor performance impact on playback.
+
+Solr memory increased from 512MB to 1024MB in SolrWayback bundle. Some large text blocks in WARC files could cause Solr memory error with multiple threads.
+
+###### New properties:
+
+New optional property in solwayback.properties 'fields'. Will default to all fields if not defined. Use comma seperated list of fields to be shown when clicking "Show Data fields" from the results page.
+
+New optional property in solwayback.properties 'url.normaliser'. Will default to normal. Other options are minimal and legacy. 
+
+New optional property in solwayback.properties 'solr.search.params'. Add default solr params to every query.
+
+New optional property in solwayback.properties 'warc.files.verify.collection'. Default false. Will check WARC file +offset is in the collection before returning binaries.
+
+New optional property in solrwayback.properties 'playback.disabled'.Default false. If set to true all playback and access to binaries (pdf, full size images etc.) will be disabled. Will only allow images tumbnail preview 200*200 pixels.
+
+New optional property in solrwaybackweb.properties 'search.uploaded.file.disabled'. Default false. If set to true search by fileupload (hash-value) will be disabled.
+
+New optional property in solrwaybackweb.properties 'webapp.prefix'. Default to /solrwayback/. If SolrWayback is deployed at kb.dk/covid-19/solrwayback, then set this property to '/covid-19/solrwayback/'
+
 
 4.2.3
 -----
 Fixed in-player video player for some MP4 videos that was classified by Tika as 'application/mp4'.
-Fixed log4shell vulnerabity in SolrWayback bundle (Solr and warc-indexer)
+Fixed log4shell vulnerability in SolrWayback bundle (Solr and warc-indexer)
 
 
 4.2.2

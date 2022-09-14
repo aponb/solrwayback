@@ -343,7 +343,7 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
         solrQuery.add("group.field", "url_norm");
         solrQuery.add("group.sort", "abs(sub(ms(" + timeStamp + "), crawl_date)) asc");
         solrQuery.add("fq", "content_type_norm:image"); // only images
-        solrQuery.add("fq", NO_REVISIT_FILTER); // No binary for revists.
+        solrQuery.add("fq", NO_REVISIT_FILTER); // No binary for revisits.
         solrQuery.add("fq","image_size:[2000 TO *]"); // No small images. (fillers etc.)
         solrQuery.add("fl", indexDocFieldList);
 
@@ -372,6 +372,45 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
 
         // log.info("resolve images:" + searchString + " found:" + images.size());
         return images;
+    }
+
+    /**
+     * Searches Solr for a video matching the given search string. If no indexed entry is found returns null.
+     * @param videoQueryString String to query Solr for.
+     * @return ArcEntryDescriptor containing info on first video found in search or null if no results found.
+     * @throws Exception If communication with Solr fails.
+     */
+    public ArcEntryDescriptor findVideo(String videoQueryString) throws Exception {
+        SolrQuery solrQuery = new SolrQuery();
+        solrQuery.setQuery(videoQueryString);
+        setSolrParams(solrQuery);
+        solrQuery.setRows(1); // Just get one result
+
+        solrQuery.set("facet", "false"); // Very important. Must overwrite to false. Facets are very slow and expensive.
+        solrQuery.add("fq", "content_type_norm:video"); // only videos
+        solrQuery.add("fq", NO_REVISIT_FILTER);
+        solrQuery.add("fl", indexDocFieldList);
+
+        QueryResponse response = solrServer.query(solrQuery, METHOD.POST);
+
+        SolrDocumentList queryResults = response.getResults();
+        if (queryResults.getNumFound() == 0) {
+            return null;
+        } else {
+            ArcEntryDescriptor videoDescriptor = new ArcEntryDescriptor();
+
+            SolrDocument solrDoc = queryResults.get(0);
+            IndexDoc indexDoc = solrDocument2IndexDoc(solrDoc);
+
+            videoDescriptor.setUrl(indexDoc.getUrl());
+            videoDescriptor.setUrl_norm(indexDoc.getUrl_norm());
+            videoDescriptor.setSource_file_path(indexDoc.getSource_file_path());
+            videoDescriptor.setHash(indexDoc.getHash());
+            videoDescriptor.setOffset(indexDoc.getOffset());
+            videoDescriptor.setContent_type(indexDoc.getMimeType());
+
+            return videoDescriptor;
+        }
     }
 
     public SearchResult search(String searchString, int results) throws Exception {
@@ -734,21 +773,45 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
         return docs;
     }
 
+     /**
+      * Creates a query for 1 or more URLs, taking care to quote URLs and escape characters where needed.
+      * The result will be in the form {@code field:("url1" OR "url2")} or {@code field:("url1" AND "url2")}
+      * depending on operator.
+      *
+      * Note: {@code data:}-URLs are ignored as they will never match.
+      * @param field    the field to query. Typically {@code url} or {@code url_norm}.
+      * @param operator {@code AND} or {@code OR}.
+      * @param urls     the URLs to create a query for.
+      * @return a query for the given URLs.
+      */
     @SuppressWarnings("SameParameterValue")
     private String urlQueryJoin(String field, String operator, Iterable<String> urls) {
         StringBuilder sb = new StringBuilder();
         boolean first = true;
         sb.append(field).append(":(");
         for (String url : urls) {
+            if (url.startsWith("data:") ) {
+                 continue;
+             }
             if (!first) {
                 sb.append(" ").append(operator).append(" ");
             }
             first = false;
-            sb.append("\"").append(normalizeUrl(url)).append("\"");
+            sb.append(createPhrase(normalizeUrl(url)));
         }
         sb.append(")");
         return sb.toString();
     }
+
+     /**
+      * Quotes the given phrase and escapes characters that needs escaping (backslash and quote).
+      * {@code foo \bar "zoo} becomes {@code "foo \\bar \"zoo"}.
+      * @param phrase any phrase.
+      * @return the phrase quoted and escaped.
+      */
+     private String createPhrase(String phrase) {
+         return "\"" + phrase.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+     }
 
     /*
      * Notice here do we not fix url_norm
@@ -764,8 +827,8 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
 
         String urlNormFixed = normalizeUrl(url);
         urlNormFixed = urlNormFixed.replace("\\", "\\\\"); // Solr encoded
+        //String query = "url_norm:\"" + urlNormFixed + "\" AND (status_code:200 OR status_code:400 OR status_code:404)"; //Need testing to see if this breaks something
         String query = "url_norm:\"" + urlNormFixed + "\" AND status_code:200";
-
         //log.debug("query:" + query);
         SolrQuery solrQuery = new SolrQuery();
         solrQuery.setQuery(query);
@@ -1018,7 +1081,6 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
         return jsonResponse;
     }
 
-    
     public String searchJsonResponseOnlyFacetsLoadMore( String query, List<String> fq, String facetField, boolean revisits) throws Exception {
         log.info("Solr query(load more from facet): "+query +" fg:"+fq+ " revisits:"+revisits +" facetField:"+facetField);
 
@@ -1120,7 +1182,11 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
         return jsonResponse;
     }
 
-    public String idLookupResponse(String id) throws Exception {
+    /*
+     * field list is a comma seperated list of fields. If null all fields will loaded
+     * 
+     */
+    public String idLookupResponse(String id, String fieldList) throws Exception {
         SolrQuery solrQuery = new SolrQuery();
         solrQuery.set("rows", "1");
         solrQuery.set("q", "id:\"" + id + "\"");
@@ -1128,6 +1194,10 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
         solrQuery.set("q.op", "AND");
         solrQuery.set("indent", "true");
         solrQuery.set("facet", "false");
+        
+        if (fieldList!= null) {
+          solrQuery.set("fl",fieldList);        
+        }
         
         NoOpResponseParser rawJsonResponseParser = new NoOpResponseParser();
         rawJsonResponseParser.setWriterType("json");
@@ -1322,14 +1392,12 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
     private static String normalizeUrl(String url) {               
         return Normalisation.canonicaliseURL(url);
     }
-    
-    //        
-    private static void setSolrParams( SolrQuery solrQuery)throws Exception {
+
+    private static void setSolrParams(SolrQuery solrQuery) {
         HashMap<String, String> SOLR_PARAMS_MAP = PropertiesLoader.SOLR_PARAMS_MAP;
         for (String key : SOLR_PARAMS_MAP.keySet()) {        
             solrQuery.set(key,SOLR_PARAMS_MAP.get(key));            
-        }                
-        
+        }
     }
 
     

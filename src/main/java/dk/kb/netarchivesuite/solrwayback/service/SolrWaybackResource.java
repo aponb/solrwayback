@@ -67,23 +67,20 @@ public class SolrWaybackResource {
   @Produces(MediaType.APPLICATION_JSON +"; charset=UTF-8")
   public ArcEntry getArcEntry(@QueryParam("source_file_path") String source_file_path, @QueryParam("offset") long offset) throws SolrWaybackServiceException {
       try {                                                                                      
-        ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset);
+        ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset,false);
         return arcEntry;                              
       } catch (Exception e) {         
           throw handleServiceExceptions(e);
       }
   }
   
-  /*
-   * Only for debugging/error finding. Not called from SolrWayback frontend.
-   * Can be improved to not also load binary which are not shown. 
-   */
+  
   @GET
   @Path("warc/header")
   @Produces({ MediaType.TEXT_PLAIN})
   public String getWarcHeader( @QueryParam("source_file_path") String source_file_path, @QueryParam("offset") long offset) throws SolrWaybackServiceException {
       try {                                                                                      
-        ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset);
+        ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset,false);
         return arcEntry.getHeader();                              
       } catch (Exception e) {         
           throw handleServiceExceptions(e);
@@ -95,7 +92,7 @@ public class SolrWaybackResource {
   @Produces(MediaType.APPLICATION_JSON +"; charset=UTF-8")
   public ArcEntry getWarcParsed( @QueryParam("source_file_path") String source_file_path, @QueryParam("offset") long offset) throws SolrWaybackServiceException {
       try {                                                                                      
-        ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset);
+        ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset,true);
          return arcEntry;                              
       } catch (Exception e) {         
           throw handleServiceExceptions(e);
@@ -152,11 +149,18 @@ public class SolrWaybackResource {
   @Produces("image/png")
   public Response getImage(@QueryParam("source_file_path") String source_file_path, @QueryParam("offset") long offset, @QueryParam("height") int height, @QueryParam("width") int width)
       throws SolrWaybackServiceException {
-    try {
+    
+      //If playback is disable, only tumbnals is allowed.
+      if (PropertiesLoader.PLAYBACK_DISABLED && (height > 200 || width >200)) {
+          throw new InvalidArgumentServiceException("Playback has been disabled in the configuration");          
+      }
+      
+      
+      try {
 
       //log.debug("Getting image from source_file_path:" + source_file_path + " offset:" + offset + " targetWidth:" + width + " targetHeight:" + height);
 
-      ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset);
+      ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset,true);
 
       BufferedImage image = ImageUtils.getImageFromBinary(arcEntry.getBinary());
 
@@ -201,6 +205,19 @@ public class SolrWaybackResource {
   public Response downloadRaw(@QueryParam("source_file_path") String source_file_path, @QueryParam("offset") long offset) throws SolrWaybackServiceException {
     try {
 
+        
+        // If playback is disabled, the download raw must be blocked. Except for images which will be resized.
+        // Too much work in frontend to rewrite the logic to call the /image url instead and then downloadRaw method could be blocked always
+        if(PropertiesLoader.PLAYBACK_DISABLED) {
+            //Temporary hack. Check if image and return tumbnail
+            IndexDoc indexDoc = NetarchiveSolrClient.getInstance().getArcEntry(source_file_path, offset);      
+            if ("image".equals(indexDoc.getContentTypeNorm())){
+                return getImage(source_file_path, offset, 200, 200);                
+            }
+            
+            throw new InvalidArgumentServiceException("Playback has been disabled in the configuration");
+        }
+        
   //  log.debug("Download from FilePath:" + source_file_path + " offset:" + offset);
       ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset,false); //DO not load binary in memory
       
@@ -340,7 +357,12 @@ public class SolrWaybackResource {
   @Produces("image/png")
   public Response getHtmlPagePreview(@QueryParam("source_file_path") String source_file_path, @QueryParam("offset") long offset)
       throws SolrWaybackServiceException {
-    try {
+      
+      if (PropertiesLoader.PLAYBACK_DISABLED) {            
+          throw new InvalidArgumentServiceException("Playback has been disabled in configuration");
+      }
+            
+     try {
       log.debug("Getting thumbnail html image from source_file_path:" + source_file_path + " offset:" + offset);
       BufferedImage image = Facade.getHtmlPagePreview(source_file_path, offset);          
       return convertToPng(image);                       
@@ -613,7 +635,7 @@ public class SolrWaybackResource {
       log.info("full url:"+fullUrl);
       int pwidStart=fullUrl.indexOf("/pwid/web/"); //urn:pwid:netarkivet.dk:2018-12-10T06:27:01Z:part:https://www.petdreams.dk/katteracer-siameser
       String pwid = fullUrl.substring(pwidStart+10);
-      System.out.println("Pwid object:"+pwid);
+
       if (!(pwid.startsWith("urn:pwid:"))){
         //syntax not correct
          log.warn("pwid syntax not correct:"+pwid);
@@ -708,6 +730,11 @@ public class SolrWaybackResource {
   @Path("/viewForward")
   public Response viewForward(@QueryParam("source_file_path") String source_file_path, @QueryParam("offset") long offset, @QueryParam("showToolbar") Boolean showToolbar) throws SolrWaybackServiceException {
     try {
+              
+       if (PropertiesLoader.PLAYBACK_DISABLED) {            
+            throw new InvalidArgumentServiceException("Playback has been disabled in configuration");
+        }
+       
       IndexDoc arcEntry = NetarchiveSolrClient.getInstance().getArcEntry(source_file_path, offset);
 
       String url =  arcEntry.getUrl();
@@ -801,7 +828,12 @@ public class SolrWaybackResource {
 */
 
   private Response viewImpl(String source_file_path, long offset,Boolean showToolbar) throws Exception{    	    	
-//    log.debug("View from FilePath:" + source_file_path + " offset:" + offset);
+    
+      if (PropertiesLoader.PLAYBACK_DISABLED) {          
+          throw new InvalidArgumentServiceException("Playback has been disabled in the configuration");
+      }
+      
+     log.debug("View from FilePath:" + source_file_path + " offset:" + offset);
     IndexDoc doc = NetarchiveSolrClient.getInstance().getArcEntry(source_file_path, offset); // better way to detect html pages than from arc file
    
     Response redirect = getRedirect(doc, null);
@@ -945,7 +977,7 @@ public class SolrWaybackResource {
       ResponseBuilder response = Response.status(status);
       
       if(arc == null){
-        arc = Facade.getArcEntry(doc.getSource_file_path(), doc.getOffset());
+        arc = Facade.getArcEntry(doc.getSource_file_path(), doc.getOffset(),false); //Do not load binary
       }      
       response.status(status); // jersey require a legal status code.
 

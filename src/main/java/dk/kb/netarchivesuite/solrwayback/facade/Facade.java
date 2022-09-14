@@ -10,10 +10,12 @@ import java.net.IDN;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
 import javax.ws.rs.QueryParam;
 
+import dk.kb.netarchivesuite.solrwayback.util.SolrQueryUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,10 +73,11 @@ public class Facade {
     
     
     /*
+     * If fieldList is null all fields will be loaded
      * returns json
      */
     public static String solrIdLookup(String id) throws Exception {
-        return NetarchiveSolrClient.getInstance().idLookupResponse(id);
+        return NetarchiveSolrClient.getInstance().idLookupResponse(id,PropertiesLoaderWeb.FIELDS);
     }
 
     
@@ -100,6 +103,12 @@ public class Facade {
         String searchHelpFile = PropertiesLoaderWeb.SEARCH_HELP_TEXT_FILE;
         String searchHelpText = FileUtil.fetchUTF8(searchHelpFile);
         return searchHelpText;
+    }
+
+    public static String getCollectionText() throws Exception {
+        String collectionFile = PropertiesLoaderWeb.COLLECTION_TEXT_FILE;
+        String collectionText = FileUtil.fetchUTF8(collectionFile);
+        return collectionText;
     }
 
     public static String generateDomainResultGraph(@QueryParam("q") String q, @QueryParam("fq") List<String> fq) throws Exception {
@@ -208,8 +217,6 @@ public class Facade {
 
         ProcessBuilder pb = null;
 
-        // Use proxy. Construct proxy URL from base url and proxy port.
-        String proxyUrl = getPreviewUrl();
 
         int timeoutMillis = PropertiesLoader.SCREENSHOT_PREVIEW_TIMEOUT * 1000;
 
@@ -218,11 +225,10 @@ public class Facade {
         pb = new ProcessBuilder(chromeCommand, "--headless", "--disable-gpu", "--ipc-connection-timeout=10000", "--timeout=" + timeoutMillis,
                 "--screenshot=" + filename, "--window-size=1280,1024", url);
 
-        log.info(chromeCommand + " --headless --disable-gpu --ipc-connection-timeout=10000 --timeout=" + timeoutMillis + " --screenshot=" + filename
-                + " --window-size=1280,1024", url);
-        // chromium-browser --headless --disable-gpu --ipc-connection-timeout=3000
-        // --screenshot=test.png --window-size=1280,1024
-        // --proxy-server="socks4://localhost:9000" https://www.google.com/
+        log.info("Screenshot native command:"+chromeCommand + " --headless --disable-gpu --ipc-connection-timeout=10000 --timeout=" + timeoutMillis + " --screenshot=" + filename
+                + " --window-size=1280,1024 " + url);
+        // example: chromium-browser --headless --disable-gpu --ipc-connection-timeout=3000 --screenshot=test.png --window-size=1280,1024 http://google.com
+
         Process start = pb.start();
         // Due to a bug in chromium, the process can hang and never terminate. The
         // timeout is not working.. Also the screenshot will not be written to file.
@@ -266,7 +272,7 @@ public class Facade {
 
         ArrayList<IndexDoc> indexDocs = NetarchiveSolrClient.getInstance().getHarvestPreviewsForUrl(year,url); // Only contains the required fields for this method
         // Convert to PagePreview
-        ArrayList<PagePreview> previews = new ArrayList<PagePreview>();
+        ArrayList<PagePreview> previews = new ArrayList<>();
 
         for (IndexDoc doc : indexDocs) {
             PagePreview pp = new PagePreview();
@@ -334,19 +340,20 @@ public class Facade {
         URL uri = new URL(url);
         String hostName = uri.getHost();
         String hostNameEncoded = IDN.toASCII(hostName);
-
+        
         String path = uri.getPath();
         if ("".equals(path)) {
             path = "/";
         }
         String urlQueryPath = uri.getQuery();
+        String urlPunied = null;
         if (urlQueryPath == null) {
-            urlQueryPath = "";
+             urlPunied = "http://" + hostNameEncoded + path;
         }
-
-        String urlPunied = "http://" + hostNameEncoded + path +"?"+ urlQueryPath;
-        String urlPuniedAndNormalized = Normalisation.canonicaliseURL(urlPunied);
-
+        else {
+            urlPunied = "http://" + hostNameEncoded + path +"?"+ urlQueryPath;            
+        }
+        String urlPuniedAndNormalized = Normalisation.canonicaliseURL(urlPunied);       
         return urlPuniedAndNormalized;
     }
 
@@ -360,46 +367,12 @@ public class Facade {
         IndexDoc doc = NetarchiveSolrClient.getInstance().getArcEntry(source_file_path, offset);
         ArrayList<String> imageLinks = doc.getImageUrls();
         if (imageLinks.size() == 0) {
-            return new ArrayList<ArcEntryDescriptor>();
+            return new ArrayList<>();
         }
-        String queryStr = queryStringForImages(imageLinks);
+        String queryStr = SolrQueryUtils.createQueryStringForUrls(imageLinks);
         ArrayList<ArcEntryDescriptor> imagesFromHtmlPage = NetarchiveSolrClient.getInstance().findImagesForTimestamp(queryStr, doc.getCrawlDate());
         return imagesFromHtmlPage;
     }
-
-
-    /**
-     *
-     * Notice only maximum of 50 images will be searched.
-     * This method is only called for image-search and we dont want too many hits from same site.
-     *
-     */
-    public static String queryStringForImages(List<String> imageLinks) {
-        if (imageLinks.size() > 50) {
-            imageLinks = imageLinks.subList(0, 50);
-        }
-
-        StringBuilder query = new StringBuilder();
-        query.append("(");
-        for (String imageUrl : imageLinks) {
-            //fix https!
-            try {
-                String fixedUrl = Normalisation.canonicaliseURL(imageUrl);
-
-                query.append(" url_norm:\""+fixedUrl+"\" OR");
-
-            }
-            catch (Exception e) {
-                //This can happen since url's from HTML are extracted without any sanity-check by the warc-indexer. Just ignore
-                log.info("Could not normalise image url:" + imageUrl);
-            }
-        }
-        query.append(" url_norm:none)"); //just close last OR
-        String queryStr = query.toString();
-        return queryStr;
-    }
-
-
 
     /*
      * Find images on a HTML page. THIS IS NOT WORKING REALLY. To many searches
@@ -445,11 +418,21 @@ public class Facade {
         }
     }
 
-    public static ArcEntry getArcEntry(String source_file_path, long offset) throws Exception {
-        return ArcParserFileResolver.getArcEntry(source_file_path, offset);
-    }
+    /**
+    * Important to set the load binary flag to false if not used    
+    */    
+    public static ArcEntry getArcEntry(String source_file_path, long offset, boolean loadBinary) throws Exception {      
 
-    public static ArcEntry getArcEntry(String source_file_path, long offset, boolean loadBinary) throws Exception {
+       //Validate WARC+offset has been indexed and in the collection.
+       //This will prevent url hacking and accessing other WARC-files if you know location on filesystem.
+       //Minor performance impact
+       //Define property to make it active.
+       
+       boolean validateWARCFileInCollection=PropertiesLoader.WARC_FILES_VERIFY_COLLECTION;        
+        if (validateWARCFileInCollection) { 
+            NetarchiveSolrClient.getInstance().getArcEntry(source_file_path, offset); //Call Solr. Correct exception already thrown if not found
+        }        
+        
         return ArcParserFileResolver.getArcEntry(source_file_path, offset, loadBinary);
     }
 
@@ -621,7 +604,10 @@ public class Facade {
 
         // the original page REMEMBER
 
-        HashSet<String> resources = HtmlParserUrlRewriter.getResourceLinksForHtmlFromArc(arc);
+        // Get all resources that does not start with "data:"
+        HashSet<String> resources = HtmlParserUrlRewriter.getResourceLinksForHtmlFromArc(arc).stream().
+                filter(url -> !url.startsWith("data:")).
+                collect(Collectors.toCollection(HashSet::new));
 
         ArrayList<IndexDoc> docs = NetarchiveSolrClient.getInstance().findNearestHarvestTimeForMultipleUrlsFullFields(resources, arc.getCrawlDate());
 
@@ -777,6 +763,7 @@ public class Facade {
     // For fronted
     public static HashMap<String, String> getPropertiesWeb() throws Exception {
         HashMap<String, String> props = new HashMap<String, String>();
+        props.put(PropertiesLoaderWeb.WEBAPP_BASEURL_PROPERTY,PropertiesLoaderWeb.WEBAPP_PREFIX); //TODO change value name when frontend also switch
         props.put(PropertiesLoaderWeb.WAYBACK_SERVER_PROPERTY, PropertiesLoaderWeb.WAYBACK_SERVER);
         props.put(PropertiesLoaderWeb.OPENWAYBACK_SERVER_PROPERTY, PropertiesLoaderWeb.OPENWAYBACK_SERVER);
         props.put(PropertiesLoaderWeb.ALLOW_EXPORT_WARC_PROPERTY, "" + PropertiesLoaderWeb.ALLOW_EXPORT_WARC);
@@ -790,6 +777,8 @@ public class Facade {
         props.put(PropertiesLoaderWeb.ARCHIVE_START_YEAR_PROPERTY, ""+PropertiesLoaderWeb.ARCHIVE_START_YEAR);
         props.put(PropertiesLoaderWeb.WORDCLOUD_STOPWORDS_PROPERTY, ""+PropertiesLoaderWeb.WORDCLOUD_STOPWORDS);
         props.put(PropertiesLoaderWeb.FACETS_PROPERTY, ""+PropertiesLoaderWeb.FACETS);
+        props.put(PropertiesLoaderWeb.SEARCH_UPLOADED_FILE_DISABLED_PROPERTY, ""+PropertiesLoaderWeb.SEARCH_UPLOADED_FILE_DISABLED);
+        props.put(PropertiesLoader.PLAYBACK_DISABLED_PROPERTY, ""+""+PropertiesLoader.PLAYBACK_DISABLED);
         props.put("solrwayback.version",PropertiesLoaderWeb.SOLRWAYBACK_VERSION);
 
         if (PropertiesLoaderWeb.TOP_LEFT_LOGO_IMAGE != null && !"".equals(PropertiesLoaderWeb.TOP_LEFT_LOGO_IMAGE.trim())) {
@@ -941,21 +930,6 @@ public class Facade {
 
         long seconds = TimeUnit.MILLISECONDS.toSeconds(millis);
         return sign + seconds + " seconds";
-    }
-
-    // takes the wayback_base url and create the proxy url
-    // http://localhost:8080/solrwayback/ -> socks4://localhost:9000
-    private static String getPreviewUrl() throws Exception {
-
-        String baseUrl = PropertiesLoader.WAYBACK_BASEURL;
-        String port = "8080"; // TODO load
-        URL url = new URL(baseUrl);
-        String host = url.getHost();
-        String part = url.getPath();
-        String socksUrl = "http://" + host + ":" + port;
-        log.info("socks url:" + socksUrl);
-        return socksUrl;
-
     }
 
 }

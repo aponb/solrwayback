@@ -260,6 +260,17 @@ public class SolrWaybackResourceWeb {
         throw handleServiceExceptions(e);
       }
     }
+
+    @GET
+    @Path("/help/collection")
+    @Produces( MediaType.TEXT_PLAIN)
+    public String getCollectionText() throws SolrWaybackServiceException {
+      try {                    
+        return Facade.getCollectionText();
+      } catch (Exception e) {           
+        throw handleServiceExceptions(e);
+      }
+    }
     
     
     @GET
@@ -367,11 +378,19 @@ public class SolrWaybackResourceWeb {
     @Path("upload/gethash")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.TEXT_PLAIN)
-    public String uploadPdf(List<Attachment> attachments,@Context HttpServletRequest request) throws  SolrWaybackServiceException { 
-
-        log.info("upload called");          
+    public String getHashForFile(List<Attachment> attachments,@Context HttpServletRequest request) throws  SolrWaybackServiceException { 
+        
+        log.info("upload called"); 
+        //Can test with: curl -v  -F upload=@imagename.jpg 'localhost:8080/solrwayback/services/frontend/upload/gethash/'
+        //If disabled in the frontend this situation can only happen by url hacking and calling the service
+        if (PropertiesLoaderWeb.SEARCH_UPLOADED_FILE_DISABLED) {
+            log.warn("Search by uploaded file called and blocked");
+            throw new InvalidArgumentServiceException("Search by uploaded file has been disabled in the configuration");
+        }
+ 
+        
         if (attachments.size() != 1) {
-          log.info("upload most have 1 attachments, #attachments="+attachments.size());
+          log.info("upload must have 1 attachments, #attachments="+attachments.size());
          throw new InvalidArgumentServiceException("Only 1 attachment allowed. #attachments="+attachments.size());   
         }      
      try {                             
@@ -564,7 +583,7 @@ public class SolrWaybackResourceWeb {
       try {
 
         log.debug("Download from FilePath:" + source_file_path + " offset:" + offset);
-        ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset);
+        ArcEntry arcEntry= Facade.getArcEntry(source_file_path, offset,true);
         
         //Only solr lookup if redirect.
         if (arcEntry.getStatus_code() >= 300 &&  arcEntry.getStatus_code() <= 399 ){

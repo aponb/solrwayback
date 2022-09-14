@@ -1,7 +1,7 @@
 # SolrWayback
 
-## SolrWayback 4.2.3 software bundle has been released
-SolrWayback bundle release 4.2.3 can be downloaded here: https://github.com/netarchivesuite/solrwayback/releases/tag/4.2.3
+## SolrWayback 4.3.0 software bundle has been released
+SolrWayback bundle release 4.3.0 can be downloaded here: https://github.com/netarchivesuite/solrwayback/releases/tag/4.3.0
 
 **THIS VERSION HAS BEEN PATCHED AGAINST 'log4shell'**
 
@@ -70,7 +70,7 @@ Archon/Actika is a book keeping application for warc-files and can start multipl
 <p align="center">
 Solrwayback showing the playback of an archived webpage with playback toolbox overlay.
 </p>
-
+gui
 <p align="center"> 
    <img src="https://github.com/netarchivesuite/solrwayback/blob/master/doc/solrwayback_linkgraph.png?raw=true" />
 </p>
@@ -171,7 +171,7 @@ The bundle contains Solr, the warc-indexer tool and SolrWayback installed on a T
 Just unzip the bundle and copy two files to your home directory and explore your WARC files. 
 
 ## Download
-Download : https://github.com/netarchivesuite/solrwayback/releases/download/4.2.3/solrwayback_package_4.2.3.zip
+Download : https://github.com/netarchivesuite/solrwayback/releases/download/4.3.0/solrwayback_package_4.3.0.zip
 
 Unzip and follow the instructions below.
  
@@ -237,6 +237,16 @@ There is a batch_warcs2_folder.sh similar script to show how to easily add new W
 
 For more information about the warc-indexer see: https://github.com/ukwa/webarchive-discovery/wiki/Quick-Start
 
+
+## Deploying under another directory context.
+Renaming the solrwayback.war to collection1#solrwayback.war in the tomcat/webapps/ folder will have tomcat mapping the 
+application from 'http://localhost:8080/solrwayback/' to 'http://localhost:8080/collection1/solrwayback/'. The requires
+defining the property in solrwaybackweb.properties: webapp.prefix=/collection1/solrwayback/
+The 'wayback.baseurl' in solrwayback.properties also needs to be fixed to match. 
+It will not work to try renaming a Tomcat deployment descriptor to collection1#solrwayback.xml. (hopefull fixed in a later release)
+The two property files must then be placed in the a /collection1 folder in the home-directory. This way multiple SolrWaybacks can be 
+running in the same Tomcat server. None of the two property files must exist in the home-directory with this setup.
+
 ## Scaling and using SolrWayback in production environment.
 The stand alone Solr-server and indexing workflow using warc-indexer.sh can scale up to 20000 WARC files of size 1GB. Using 20 threads
 indexing a collection of this size  can take up to 3 weeks.  This will result in
@@ -256,13 +266,7 @@ If you want to index a new collection into solr and remove the old index.
 
 ### Faster indexing
 A powerful laptop can handle up to 8 simultaneous indexing processes with Solr running on the same laptop. 
-Using an SSD for the Solr-index will speed up indexing and also improve search/playback performance.
-
-#### Solrwayback control GUI (Windows only)
-For Windows users there is a executable GUI setup program that will start tomcat/solr and copy properties to the home directory.
-From the GUI you can select WARC files with a file choose and start indexing. Click the /addOn/SolrSetup.exe file to start GUI.
-
-For more information see: https://github.com/MadsGreen/SolrSetup/
+Using an SSD for the Solr-index will speed up indexing and also improve search/playback performance drastically.
 
 ### 4) SEARCHING AND ADDITIONAL FEATURES  
 Click the question mark in the search-field to get help with the search syntax for more complex queries and using 

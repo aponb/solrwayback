@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,22 +22,28 @@ public class PropertiesLoaderWeb {
 
     
     public static final String WAYBACK_SERVER_PROPERTY="wayback.baseurl";
+    public static final String WEBAPP_BASEURL_PROPERTY="webapp.baseurl";  //TODO DELETE WHEN FRONTEND HAS CHANGED NAME
+    public static final String WEBAPP_PREFIX_PROPERTY="webapp.prefix";
+    
     public static final String OPENWAYBACK_SERVER_PROPERTY="openwayback.baseurl";	
     public static final String FACETS_PROPERTY = "facets";	
+    public static final String FIELDS_PROPERTY = "fields";
     public static final String MAPS_LATITUDE_PROPERTY = "maps.latitude";
     public static final String MAPS_LONGITUDE_PROPERTY = "maps.longitude";
     public static final String MAPS_RADIUS_PROPERTY = "maps.radius";
     public static final String ALLOW_EXPORT_WARC_PROPERTY = "allow.export.warc";
     public static final String ALLOW_EXPORT_CSV_PROPERTY = "allow.export.csv";
-    public static final String WORDCLOUD_STOPWORDS_PROPERTY="wordcloud.stopwords";
+    public static final String WORDCLOUD_STOPWORDS_PROPERTY="wordcloud.stopwords";    
+    public static final String SEARCH_UPLOADED_FILE_DISABLED_PROPERTY="search.uploaded.file.disabled";
     
     public static final String EXPORT_WARC_MAXRESULTS_PROPERTY = "export.warc.maxresults";
     public static final String EXPORT_CSV_MAXRESULTS_PROPERTY = "export.csv.maxresults";
     public static final String EXPORT_WARC_EXPANDED_MAXRESULTS_PROPERTY = "export.warc.maxresults";
-         
+
     public static final String EXPORT_CSV_FIELDS_PROPERTY = "export.csv.fields";
     public static final String ABOUT_TEXT_FILE_PROPERTY = "about.text.file";
     public static final String SEARCH_HELP_FILE_PROPERTY = "search.help.text.file";
+    public static final String COLLECTION_TEXT_FILE_PROPERTY = "collection.text.file";
     public static final String ARCHIVE_START_YEAR_PROPERTY = "archive.start.year";
 
     public static final String LEAFLET_SOURCE_PROPERTY = "leaflet.source";
@@ -44,11 +51,12 @@ public class PropertiesLoaderWeb {
     public static final String TOP_LEFT_LOGO_IMAGE_PROPERTY = "top.left.logo.image";
     public static final String TOP_LEFT_LOGO_IMAGE_LINK_PROPERTY = "top.left.logo.image.link";
  
-
     public static String SOLRWAYBACK_VERSION; //Will be set from initialcontext-listener
     public static String OPENWAYBACK_SERVER;
     public static int ARCHIVE_START_YEAR;
     public static String WAYBACK_SERVER = null;
+    
+    public static String WEBAPP_PREFIX = null;
     public static String MAPS_LATITUDE;
     public static String MAPS_LONGITUDE;
     public static String MAPS_RADIUS;
@@ -59,25 +67,27 @@ public class PropertiesLoaderWeb {
     public static boolean ALLOW_EXPORT_WARC;
     public static boolean ALLOW_EXPORT_CSV;
     public static String  EXPORT_CSV_FIELDS;;
+    public static boolean SEARCH_UPLOADED_FILE_DISABLED;
     
     public static String LEAFLET_SOURCE;
     public static String LEAFLET_ATTRIBUTION;
     public static String ABOUT_TEXT_FILE;
     public static String SEARCH_HELP_TEXT_FILE;
+    public static String COLLECTION_TEXT_FILE;
     public static String TOP_LEFT_LOGO_IMAGE;
     public static String TOP_LEFT_LOGO_IMAGE_LINK;
 
     private static Properties serviceProperties = null;
     //Default values.
     public static List<String> FACETS = Arrays.asList("domain", "content_type_norm", "type", "crawl_year", "status_code", "public_suffix"); 
-
+    public static String FIELDS=null;
+    
     //Default empty if not defined in properties
     public static  List<String> WORDCLOUD_STOPWORDS = new ArrayList<String>();
     
     public static void initProperties() {
         initProperties(DEFAULT_PROPERTY_WEB_FILE);      
-    }
-
+    }        
 
     public static void initProperties(String propertyFile) {
         try {
@@ -105,38 +115,56 @@ public class PropertiesLoaderWeb {
             WAYBACK_SERVER =serviceProperties.getProperty(WAYBACK_SERVER_PROPERTY);
             FACETS = Arrays.asList(getProperty(FACETS_PROPERTY, StringUtils.join(FACETS, ",")).split(", *"));		
             WORDCLOUD_STOPWORDS = Arrays.asList(getProperty(WORDCLOUD_STOPWORDS_PROPERTY, StringUtils.join(WORDCLOUD_STOPWORDS, ",")).split(", *"));
-                        
+            WEBAPP_PREFIX = serviceProperties.getProperty(WEBAPP_PREFIX_PROPERTY,"/solrwayback/"); //Default to /solrwayback/ if not defined
             OPENWAYBACK_SERVER = serviceProperties.getProperty(OPENWAYBACK_SERVER_PROPERTY);
             MAPS_LATITUDE = serviceProperties.getProperty(MAPS_LATITUDE_PROPERTY);
             MAPS_LONGITUDE = serviceProperties.getProperty(MAPS_LONGITUDE_PROPERTY);
             MAPS_RADIUS = serviceProperties.getProperty(MAPS_RADIUS_PROPERTY);
             ALLOW_EXPORT_WARC = Boolean.parseBoolean(serviceProperties.getProperty(ALLOW_EXPORT_WARC_PROPERTY));
             ALLOW_EXPORT_CSV = Boolean.parseBoolean(serviceProperties.getProperty(ALLOW_EXPORT_CSV_PROPERTY));
+            
+            SEARCH_UPLOADED_FILE_DISABLED = Boolean.parseBoolean(serviceProperties.getProperty(SEARCH_UPLOADED_FILE_DISABLED_PROPERTY));
             EXPORT_CSV_FIELDS = serviceProperties.getProperty(EXPORT_CSV_FIELDS_PROPERTY);
-            ABOUT_TEXT_FILE = serviceProperties.getProperty(ABOUT_TEXT_FILE_PROPERTY).trim();
-            SEARCH_HELP_TEXT_FILE = serviceProperties.getProperty(SEARCH_HELP_FILE_PROPERTY).trim();
+            
+            ABOUT_TEXT_FILE = serviceProperties.getProperty(ABOUT_TEXT_FILE_PROPERTY);
+            SEARCH_HELP_TEXT_FILE = serviceProperties.getProperty(SEARCH_HELP_FILE_PROPERTY);
+            COLLECTION_TEXT_FILE = serviceProperties.getProperty(COLLECTION_TEXT_FILE_PROPERTY);
+
             LEAFLET_SOURCE = serviceProperties.getProperty(LEAFLET_SOURCE_PROPERTY);
             LEAFLET_ATTRIBUTION = serviceProperties.getProperty(LEAFLET_ATTRIBUTION_PROPERTY);
             TOP_LEFT_LOGO_IMAGE = serviceProperties.getProperty(TOP_LEFT_LOGO_IMAGE_PROPERTY);
             TOP_LEFT_LOGO_IMAGE_LINK = serviceProperties.getProperty(TOP_LEFT_LOGO_IMAGE_LINK_PROPERTY);
-            
-            
+                        
             String csv_max_results= serviceProperties.getProperty(EXPORT_CSV_MAXRESULTS_PROPERTY);
             String warc_max_results= serviceProperties.getProperty(EXPORT_WARC_MAXRESULTS_PROPERTY);
             String warc_expanded_max_results= serviceProperties.getProperty(EXPORT_WARC_EXPANDED_MAXRESULTS_PROPERTY);
-            
+
             if (csv_max_results != null) {
-                EXPORT_CSV_MAXRESULTS  = Long.parseLong(csv_max_results);                
+                EXPORT_CSV_MAXRESULTS  = Long.parseLong(csv_max_results.trim());                
             }
             
-            if (warc_max_results  != null) {
-                EXPORT_WARC_MAXRESULTS  = Long.parseLong(warc_max_results);               
+            if (warc_max_results != null) {
+                EXPORT_WARC_MAXRESULTS  = Long.parseLong(warc_max_results.trim());               
             }
 
-            if ( warc_expanded_max_results!= null) {                
-                EXPORT_WARC_EXPANDED_MAXRESULTS  = Long.parseLong( warc_expanded_max_results);               
+            if ( warc_expanded_max_results != null) {                
+                EXPORT_WARC_EXPANDED_MAXRESULTS  = Long.parseLong( warc_expanded_max_results.trim());               
             }
 
+            if (ABOUT_TEXT_FILE == null || ABOUT_TEXT_FILE.trim().isEmpty()) {
+                ABOUT_TEXT_FILE = "/about_this_archive.txt";
+                log.warn("about.text.file in solrwaybackweb.properties is not set. Using default: /about_this_archive.txt");
+            }
+
+            if (SEARCH_HELP_TEXT_FILE == null || SEARCH_HELP_TEXT_FILE.trim().isEmpty()) {
+                SEARCH_HELP_TEXT_FILE = "/search_help.txt";
+                log.warn("search.help.text.file in solrwaybackweb.properties is not set. Using default: /search_help.txt");
+            }
+
+            if (COLLECTION_TEXT_FILE == null || COLLECTION_TEXT_FILE.trim().isEmpty()) {
+                COLLECTION_TEXT_FILE = "/about_collection.txt";
+                log.warn("collection.text.file in solrwaybackweb.properties is not set. Using default: /about_collection.txt");
+            }
                         
             // start year
             String startYearStr = serviceProperties.getProperty(ARCHIVE_START_YEAR_PROPERTY);
@@ -154,7 +182,13 @@ public class PropertiesLoaderWeb {
                 ARCHIVE_START_YEAR=1998;
             }
 
+            String fieldsStr = serviceProperties.getProperty(FIELDS_PROPERTY);
+            if (fieldsStr != null) {
+                FIELDS=fieldsStr;                
+            }
+                        
             //Set max export sizes                                   
+            log.info("Property:"+ WEBAPP_PREFIX_PROPERTY +" = " + WEBAPP_PREFIX);
             log.info("Property:"+ OPENWAYBACK_SERVER_PROPERTY +" = " + OPENWAYBACK_SERVER);
             log.info("Property:"+ ALLOW_EXPORT_WARC_PROPERTY +" = " + ALLOW_EXPORT_WARC);
             log.info("Property:"+ ALLOW_EXPORT_CSV_PROPERTY +" = " + ALLOW_EXPORT_CSV);
@@ -167,9 +201,11 @@ public class PropertiesLoaderWeb {
             log.info("Property:"+ MAPS_LONGITUDE_PROPERTY+" = " +MAPS_LONGITUDE);
             log.info("Property:"+ MAPS_RADIUS_PROPERTY+" = " + MAPS_RADIUS);
             log.info("Property:"+ FACETS_PROPERTY +" = " + FACETS);
-            log.info("Property:"+ WORDCLOUD_STOPWORDS_PROPERTY +" = " + WORDCLOUD_STOPWORDS);            
+            log.info("Property:"+ WORDCLOUD_STOPWORDS_PROPERTY +" = " + WORDCLOUD_STOPWORDS);        
+            log.info("Property:"+ SEARCH_UPLOADED_FILE_DISABLED_PROPERTY+" = " +SEARCH_UPLOADED_FILE_DISABLED);            
             log.info("Property:"+ ABOUT_TEXT_FILE_PROPERTY +" = " + ABOUT_TEXT_FILE);
             log.info("Property:"+ SEARCH_HELP_FILE_PROPERTY +" = " + SEARCH_HELP_TEXT_FILE );
+            log.info("Property:"+ COLLECTION_TEXT_FILE_PROPERTY +" = " + COLLECTION_TEXT_FILE );
             log.info("Property:"+ ARCHIVE_START_YEAR_PROPERTY +" = " + ARCHIVE_START_YEAR);			
             log.info("Property:"+ LEAFLET_SOURCE_PROPERTY +" = " + LEAFLET_SOURCE);
             log.info("Property:"+ LEAFLET_ATTRIBUTION_PROPERTY +" = " + LEAFLET_ATTRIBUTION);
@@ -181,6 +217,7 @@ public class PropertiesLoaderWeb {
             e.printStackTrace();
             log.error("Could not load property file:"+ propertyFile);
         }
+        
     }
 
     public static String getProperty(String key, String defaultValue) {
@@ -190,5 +227,4 @@ public class PropertiesLoaderWeb {
         Object o = serviceProperties.getProperty(key);
         return o == null ? defaultValue : o.toString();
     }
-
 }
