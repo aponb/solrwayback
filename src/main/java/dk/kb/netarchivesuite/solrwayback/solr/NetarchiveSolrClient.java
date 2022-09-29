@@ -39,12 +39,21 @@ import dk.kb.netarchivesuite.solrwayback.service.dto.statistics.DomainYearStatis
 import dk.kb.netarchivesuite.solrwayback.service.exception.InvalidArgumentServiceException;
 import dk.kb.netarchivesuite.solrwayback.util.DateUtils;
 
-public class NetarchiveSolrClient extends NetarchiveAbstractClient {
+public class NetarchiveSolrClient {
     private static final Logger log = LoggerFactory.getLogger(NetarchiveSolrClient.class);
+    private static final long M = 1000000; // ns -> ms
 
     protected static SolrClient solrServer;
     protected static SolrClient noCacheSolrServer;
     protected static NetarchiveSolrClient instance = null;
+    protected static IndexWatcher indexWatcher = null;
+    protected static Pattern TAGS_VALID_PATTERN = Pattern.compile("[-_.a-zA-Z0-9Ã¦Ã¸Ã¥Ã†Ã˜Ã…]+");
+  
+    private static String NO_REVISIT_FILTER ="record_type:response OR record_type:arc OR record_type:resource";
+    protected static String indexDocFieldList = "id,score,title,url,url_norm,links_images,source_file_path,source_file,source_file_offset,domain,resourcename,content_type,content_type_full,content_type_norm,hash,type,crawl_date,content_encoding,exif_location,status_code,last_modified,redirect_to_norm";
+    protected static String indexDocFieldListShort = "url,url_norm,source_file_path,source_file,source_file_offset,crawl_date";
+
+    protected Boolean solrAvailable = null;
 
     protected NetarchiveSolrClient() { // private. Singleton
     }
@@ -59,14 +68,12 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
     public static void initialize(String solrServerUrl) {
         SolrClient innerSolrClient = new HttpSolrClient.Builder(solrServerUrl).build();
 
-
-        if (PropertiesLoader.SOLR_SERVER_CACHING==true) {
+        if (PropertiesLoader.SOLR_SERVER_CACHING) {
             int maxCachingEntries = PropertiesLoader.SOLR_SERVER_CACHING_MAX_ENTRIES;
             int maxCachingSeconds = PropertiesLoader.SOLR_SERVER_CACHING_AGE_SECONDS;
             solrServer = new CachingSolrClient(innerSolrClient, maxCachingEntries,  maxCachingSeconds, -1); //-1 means no maximum number of connections 
             log.info("SolrClient initialized with caching properties: maxCachedEntrie="+maxCachingEntries +" cacheAgeSeconds="+maxCachingSeconds);
-        }
-        else {
+        } else {
             solrServer = new HttpSolrClient.Builder(solrServerUrl).build();
             log.info("SolClient initialized without caching");
         }
@@ -78,6 +85,12 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
         // error code 413/414, due to monster URI. (and it is faster)
 
         instance = new NetarchiveSolrClient();
+
+        if (PropertiesLoader.SOLR_SERVER_CHECK_INTERVAL > 0) {
+            indexWatcher = new IndexWatcher(
+                    innerSolrClient, PropertiesLoader.SOLR_SERVER_CHECK_INTERVAL, instance::indexStatusChanged);
+        }
+
         log.info("SolrClient initialized with solr server url:" + solrServerUrl);
     }
 
@@ -86,6 +99,36 @@ public class NetarchiveSolrClient extends NetarchiveAbstractClient {
             throw new IllegalArgumentException("SolrClient not initialized");
         }
         return instance;
+    }
+
+    private void indexStatusChanged(IndexWatcher.STATUS status) {
+        switch (status) {
+            case changed:
+                if (solrServer instanceof CachingSolrClient) {
+                    ((CachingSolrClient)solrServer).clearCache();
+                }
+                break;
+            case available:
+                solrAvailable = true;
+                break;
+            case unavailable:
+                solrAvailable = false;
+                break;
+            case undetermined:
+                log.debug("Got IndexWatcher.STATUS.undetermined. This should not be possible");
+                break;
+            default:
+                log.warn("Unsupported value for IndexWatcher.STATUS: '{}'", status);
+        }
+    }
+
+    /**
+     * Requires a running {@link IndexWatcher}. If not enabled, the result will always be true.
+     * Enabled per default, controlled by {@link PropertiesLoader#SOLR_SERVER_CHECK_INTERVAL}).
+     * @return true if the backing Solr is available, else false. null if not determined
+     */
+    public Boolean isSolrAvailable() {
+        return solrAvailable;
     }
 
     /*

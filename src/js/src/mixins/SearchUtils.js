@@ -1,5 +1,6 @@
 import HistoryRoutingUtils from './HistoryRoutingUtils'
 import { mapState, mapActions } from 'vuex'
+import { requestService } from '../services/RequestService'
 
 export default {
   mixins: [HistoryRoutingUtils],
@@ -18,6 +19,7 @@ export default {
       updateSolrSettingUrlSearch:'updateSolrSettingUrlSearch',
       updateSolrSettingOffset:'updateSolrSettingOffset',
       updatePreNormalizedQuery:'updatePreNormalizedQuery',
+      updateNormalizedQuery:'updateNormalizedQuery',
       clearResults:'clearResults',
       clearFacets:'clearFacets',
       requestSearch:'requestSearch',
@@ -42,12 +44,14 @@ export default {
       updateHistory ? this.$_pushSearchHistory('Search', futureQuery, this.searchAppliedFacets, this.solrSettings) : null
     },
     //Deliver an URL search
-    deliverUrlSearchRequest(futureQuery, updateHistory) {
+     async deliverUrlSearchRequest(futureQuery, updateHistory) {
       this.updatePreNormalizedQuery(futureQuery)
-      if(this.$_validateUrlSearchPrefix(this.DisectQueryForNewUrlSearch(futureQuery))) {
-        this.requestUrlSearch({query:this.DisectQueryForNewUrlSearch(futureQuery), facets:this.searchAppliedFacets, options:this.solrSettings})
-        this.requestNormalizedFacets({query:this.DisectQueryForNewUrlSearch(futureQuery), facets:this.searchAppliedFacets, options:this.solrSettings})
-        updateHistory ? this.$_pushSearchHistory('Search', this.DisectQueryForNewUrlSearch(futureQuery), this.searchAppliedFacets, this.solrSettings) : null
+      if(this.$_validateUrlSearchPrefix(this.disectQueryForNewUrlSearch(futureQuery))) {
+        let normalizedURL = await requestService.getNormalizedURL(this.disectQueryForNewUrlSearch(futureQuery))
+        this.updateNormalizedQuery(normalizedURL)
+        this.requestUrlSearch({query:normalizedURL, facets:this.searchAppliedFacets, options:this.solrSettings, preNormalizedQuery:this.disectQueryForNewUrlSearch(futureQuery)})
+        this.requestNormalizedFacets({query:normalizedURL, facets:this.searchAppliedFacets, options:this.solrSettings, preNormalizedQuery:this.disectQueryForNewUrlSearch(futureQuery)})
+        updateHistory ? this.$_pushSearchHistory('Search', normalizedURL, this.searchAppliedFacets, this.solrSettings) : null
       }
       else {
         this.setNotification({
@@ -70,12 +74,13 @@ export default {
     // Prepare for a new search
     prepareStateForNewSearch(futureQuery, pagnation) {
       this.updatePreNormalizedQuery(null)
+      this.updateNormalizedQuery(null)
       this.clearResults()
       !pagnation ? this.clearFacets() : null
       this.updateQuery(futureQuery)
     },
     // Disect the query for URL searching
-    DisectQueryForNewUrlSearch(futureQuery) {
+    disectQueryForNewUrlSearch(futureQuery) {
       let queryString = ''
           if(futureQuery.substring(0,10) === 'url_norm:"') {
             queryString = futureQuery.replace('url_norm:"', '')

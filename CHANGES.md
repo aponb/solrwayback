@@ -1,6 +1,18 @@
 # SolrWayback changelog
 
 
+
+
+4.3.2
+Cache invalidation based on background checks for index changes. Better solr-index caching implementation. Using a Solr query that detect changes that  
+can be defined to run at given interval. (see documentation in solrwayback.properties).
+The new property can be added to solrwayback.properties:
+solr.server.check.interval.seconds=60
+Fixed double calling of service metod when using url_search. (had to effect on users)  (github jira #258)
+
+ 
+ 
+
 4.3.1
 -----
 New propety must be added to the solrwaybackweb.properties: 
@@ -20,6 +32,7 @@ issues.
 
 GUI improvement. Use escape-key to close all modal pop-ups. (toolbox, search syntax, full size 
 images)
+
 
 
 
